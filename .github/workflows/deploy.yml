@@ -1,45 +1,23 @@
-name: Deploy MERN App to Azure VM
+- name: Deploy to Azure VM
+  run: |
+    ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
+      cd ~/Crud-Mern-Stack
 
-on:
-  push:
-    branches:
-      - main
+      echo "🔄 Pulling latest code..."
+      git pull origin main
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+      echo "📦 Installing backend dependencies..."
+      cd backend
+      npm install
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      echo "🚀 Restarting backend without PM2..."
+      pkill node || true
+      nohup node index.js > server.log 2>&1 &
 
-      - name: Set up SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      echo "🌐 Building frontend..."
+      cd ../frontend
+      npm install
+      npm run build
 
-      - name: Deploy to Azure VM
-        run: |
-          ssh ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd ~/Crud-Mern-Stack
-
-            echo "🔄 Pulling latest code..."
-            git pull origin main
-
-            echo "📦 Installing backend dependencies..."
-            cd backend
-            npm install
-
-            echo "🚀 Restarting backend without PM2..."
-            pkill node || true
-            nohup node index.js > server.log 2>&1 &
-
-            echo "🌐 Building frontend..."
-            cd ../frontend
-            npm install
-            npm run build
-
-            echo "✅ Deployment complete."
-          EOF
+      echo "✅ Deployment complete."
+    EOF
