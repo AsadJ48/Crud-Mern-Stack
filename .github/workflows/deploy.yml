@@ -16,7 +16,8 @@ jobs:
         run: |
           set -e
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          # write the private key exactly as provided in the secret
+          printf "%s" "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
           # Guard: ensure SSH_HOST is set
@@ -25,18 +26,15 @@ jobs:
             exit 1
           fi
 
-          # Make ssh-keyscan non-fatal (we also disable host checking on ssh)
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-
-      # === DEBUG (temporary) ===
+      # === DEBUG (temporary; safe to keep until things are green) ===
       - name: Show host & user (diagnostic)
         run: |
           echo "HOST='${{ secrets.SSH_HOST }}'"
           echo "USER='${{ secrets.SSH_USERNAME }}'"
           echo "KEY first line:"
-          head -n 1 ~/.ssh/id_rsa
+          head -n 1 ~/.ssh/id_rsa || true
           echo "KEY last line:"
-          tail -n 1 ~/.ssh/id_rsa
+          tail -n 1 ~/.ssh/id_rsa || true
 
       - name: Test SSH connectivity (verbose)
         run: |
@@ -49,20 +47,45 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
             ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
               set -e
-              cd ~/Crud-Mern-Stack
 
-              echo "🔄 Pulling latest code..."
-              git pull origin main
+              REPO_DIR="$HOME/Crud-Mern-Stack"
+              REPO_URL="https://github.com/AsadJ48/Crud-Mern-Stack.git"
 
-              echo "📦 Installing backend dependencies..."
+              # 1) Ensure repo exists (first run)
+              if [ ! -d "$REPO_DIR/.git" ]; then
+                echo "📥 Cloning repository..."
+                git clone "$REPO_URL" "$REPO_DIR"
+              fi
+
+              cd "$REPO_DIR"
+
+              # 2) Ensure correct origin remote
+              echo "🔧 Ensuring correct remote..."
+              git remote set-url origin "$REPO_URL"
+
+              # 3) Force-sync to origin/main and remove untracked files
+              echo "🔄 Force syncing working tree..."
+              git fetch origin
+              git reset --hard origin/main
+              git clean -fd
+
+              # 4) Backend: install deps & (re)start
+              echo "📦 Backend: installing dependencies..."
               cd backend
               npm install
 
-              echo "🚀 Restarting backend without PM2..."
-              pkill node || true
-              nohup node index.js > server.log 2>&1 &
+              # Detect backend entry file
+              ENTRY="index.js"
+              if [ ! -f "$ENTRY" ]; then
+                if [ -f "server.js" ]; then ENTRY="server.js"; else echo "❌ No entry file (index.js/server.js) found"; exit 1; fi
+              fi
 
-              echo "🌐 Building frontend..."
+              echo "🚀 Backend: restarting without PM2..."
+              pkill node || true
+              nohup node "$ENTRY" > server.log 2>&1 &
+
+              # 5) Frontend: build
+              echo "🌐 Frontend: building..."
               cd ../frontend
               npm install
               npm run build
