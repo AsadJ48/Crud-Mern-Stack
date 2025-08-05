@@ -13,39 +13,29 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up SSH key
-  run: |
-    set -e
-    mkdir -p ~/.ssh
-    echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-    chmod 600 ~/.ssh/id_rsa
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-    # Guard: ensure SSH_HOST is set
-    if [ -z "${{ secrets.SSH_HOST }}" ]; then
-      echo "❌ SSH_HOST secret is empty. Set it in Settings → Secrets → Actions."
-      exit 1
-    fi
+          # Guard: ensure SSH_HOST is set
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then
+            echo "❌ SSH_HOST secret is empty. Set it in Settings → Secrets → Actions."
+            exit 1
+          fi
 
-    # Make ssh-keyscan non-fatal (useful but optional since we also disable host checking)
-    ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-
-- name: Show host & user (diagnostic)
-  run: |
-    echo "HOST='${{ secrets.SSH_HOST }}'"
-    echo "USER='${{ secrets.SSH_USERNAME }}'"
-    echo "KEY first line:"
-    head -n 1 ~/.ssh/id_rsa
-    echo "KEY last line:"
-    tail -n 1 ~/.ssh/id_rsa
-
+          # Make ssh-keyscan non-fatal (we also disable host checking on ssh)
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       # === DEBUG (temporary) ===
-      - name: Debug key header and user/host
+      - name: Show host & user (diagnostic)
         run: |
-          echo "SSH_USERNAME=${{ secrets.SSH_USERNAME }}"
-          echo "SSH_HOST=${{ secrets.SSH_HOST }}"
-          echo "Key begins with:"
+          echo "HOST='${{ secrets.SSH_HOST }}'"
+          echo "USER='${{ secrets.SSH_USERNAME }}'"
+          echo "KEY first line:"
           head -n 1 ~/.ssh/id_rsa
-          echo "Key ends with:"
+          echo "KEY last line:"
           tail -n 1 ~/.ssh/id_rsa
 
       - name: Test SSH connectivity (verbose)
