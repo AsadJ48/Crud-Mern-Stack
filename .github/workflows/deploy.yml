@@ -28,6 +28,15 @@ jobs:
     # Make ssh-keyscan non-fatal (useful but optional since we also disable host checking)
     ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+- name: Show host & user (diagnostic)
+  run: |
+    echo "HOST='${{ secrets.SSH_HOST }}'"
+    echo "USER='${{ secrets.SSH_USERNAME }}'"
+    echo "KEY first line:"
+    head -n 1 ~/.ssh/id_rsa
+    echo "KEY last line:"
+    tail -n 1 ~/.ssh/id_rsa
+
 
       # === DEBUG (temporary) ===
       - name: Debug key header and user/host
