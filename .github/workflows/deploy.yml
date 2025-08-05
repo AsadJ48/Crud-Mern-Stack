@@ -1,47 +1,62 @@
-- name: Set up SSH key
-  run: |
-    mkdir -p ~/.ssh
-    echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-    chmod 600 ~/.ssh/id_rsa
-    ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+name: Deploy MERN App to Azure VM
 
-# === DEBUG STEPS (add these two) ===
-- name: Debug key header and user/host
-  run: |
-    echo "SSH_USERNAME=${{ secrets.SSH_USERNAME }}"
-    echo "SSH_HOST=${{ secrets.SSH_HOST }}"
-    echo "Key begins with:"
-    head -n 1 ~/.ssh/id_rsa
-    echo "Key ends with:"
-    tail -n 1 ~/.ssh/id_rsa
+on:
+  push:
+    branches: [ main ]
 
-- name: Test SSH connectivity (verbose)
-  run: |
-    ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-      ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "echo '✅ SSH OK on runner'"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-# === YOUR EXISTING DEPLOY STEP ===
-- name: Deploy to Azure VM
-  run: |
-    ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-      ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
-        cd ~/Crud-Mern-Stack
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-        echo "🔄 Pulling latest code..."
-        git pull origin main
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-        echo "📦 Installing backend dependencies..."
-        cd backend
-        npm install
+      # === DEBUG (temporary) ===
+      - name: Debug key header and user/host
+        run: |
+          echo "SSH_USERNAME=${{ secrets.SSH_USERNAME }}"
+          echo "SSH_HOST=${{ secrets.SSH_HOST }}"
+          echo "Key begins with:"
+          head -n 1 ~/.ssh/id_rsa
+          echo "Key ends with:"
+          tail -n 1 ~/.ssh/id_rsa
 
-        echo "🚀 Restarting backend without PM2..."
-        pkill node || true
-        nohup node index.js > server.log 2>&1 &
+      - name: Test SSH connectivity (verbose)
+        run: |
+          ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "echo '✅ SSH OK on runner'"
 
-        echo "🌐 Building frontend..."
-        cd ../frontend
-        npm install
-        npm run build
+      # === REAL DEPLOY ===
+      - name: Deploy to Azure VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
+              set -e
+              cd ~/Crud-Mern-Stack
 
-        echo "✅ Deployment complete."
-      EOF
+              echo "🔄 Pulling latest code..."
+              git pull origin main
+
+              echo "📦 Installing backend dependencies..."
+              cd backend
+              npm install
+
+              echo "🚀 Restarting backend without PM2..."
+              pkill node || true
+              nohup node index.js > server.log 2>&1 &
+
+              echo "🌐 Building frontend..."
+              cd ../frontend
+              npm install
+              npm run build
+
+              echo "✅ Deployment complete."
+          EOF
