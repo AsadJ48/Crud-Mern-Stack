@@ -80,4 +80,5 @@ jobs:
               npm run build
 
               echo "✅ Deployment complete."
+              sleep 10
           EOF
