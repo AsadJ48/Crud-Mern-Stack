@@ -1,8 +1,7 @@
-name: Deploy MERN App to Azure VM
+name: CD - Deploy to Azure VM
 
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:  # ⬅️ This adds the manual "Run workflow" button
 
 jobs:
   deploy:
@@ -16,17 +15,14 @@ jobs:
         run: |
           set -e
           mkdir -p ~/.ssh
-          # write the private key exactly as provided in the secret
           printf "%s" "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # Guard: ensure SSH_HOST is set
           if [ -z "${{ secrets.SSH_HOST }}" ]; then
             echo "❌ SSH_HOST secret is empty. Set it in Settings → Secrets → Actions."
             exit 1
           fi
 
-      # === DEBUG (temporary; safe to keep until things are green) ===
       - name: Show host & user (diagnostic)
         run: |
           echo "HOST='${{ secrets.SSH_HOST }}'"
@@ -41,7 +37,6 @@ jobs:
           ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
             ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "echo '✅ SSH OK on runner'"
 
-      # === REAL DEPLOY ===
       - name: Deploy to Azure VM
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
@@ -51,7 +46,6 @@ jobs:
               REPO_DIR="$HOME/Crud-Mern-Stack"
               REPO_URL="https://github.com/AsadJ48/Crud-Mern-Stack.git"
 
-              # 1) Ensure repo exists (first run)
               if [ ! -d "$REPO_DIR/.git" ]; then
                 echo "📥 Cloning repository..."
                 git clone "$REPO_URL" "$REPO_DIR"
@@ -59,33 +53,28 @@ jobs:
 
               cd "$REPO_DIR"
 
-              # 2) Ensure correct origin remote
               echo "🔧 Ensuring correct remote..."
               git remote set-url origin "$REPO_URL"
 
-              # 3) Force-sync to origin/main and remove untracked files
               echo "🔄 Force syncing working tree..."
               git fetch origin
               git reset --hard origin/main
               git clean -fd
 
-              # 4) Backend: install deps & (re)start
               echo "📦 Backend: installing dependencies..."
               cd backend
               npm install
 
-              # Detect backend entry file
               ENTRY="index.js"
               if [ ! -f "$ENTRY" ]; then
-                if [ -f "server.js" ]; then ENTRY="server.js"; else echo "❌ No entry file (index.js/server.js) found"; exit 1; fi
+                if [ -f "server.js" ]; then ENTRY="server.js"; else echo "❌ No entry file found"; exit 1; fi
               fi
 
-              echo "🚀 Backend: restarting without PM2..."
+              echo "🚀 Restarting backend..."
               pkill node || true
               nohup node "$ENTRY" > server.log 2>&1 &
 
-              # 5) Frontend: build
-              echo "🌐 Frontend: building..."
+              echo "🌐 Building frontend..."
               cd ../frontend
               npm install
               npm run build
